@@ -9,7 +9,7 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "Delay.h"
+
 
 
 //==============================================================================
@@ -32,6 +32,16 @@ public:
    #endif
 
     void processBlock (AudioBuffer<float>&, MidiBuffer&) override;
+    
+    void writeToDelayBuffer (AudioBuffer<float>& buffer,
+                             const int channelIn, const int channelOut,
+                             const int writePos, float startGain, float endGain,
+                             bool replacing);
+    
+    void readFromDelayBuffer (AudioBuffer<float>& buffer,
+                              const int channelIn, const int channelOut,
+                              const int readPos, float startGain, float endGain,
+                              bool replacing);
 
     //==============================================================================
     AudioProcessorEditor* createEditor() override;
@@ -63,6 +73,10 @@ public:
     AudioProcessorValueTreeState apvts;
     AudioProcessorValueTreeState::ParameterLayout createParameters();
 
+    static String paramGain;
+    static String paramTime;
+    static String paramFeedback;
+    
 private:
     double seconds = 0;
     bool isActive { false };
@@ -70,18 +84,20 @@ private:
     
     float* rDelay, lDelay;
     
-    enum
-    {
-        delayIndex
-    };
-    dsp::ProcessorChain<Delay<float>> fxChain;
-
-    // Called when user changes a parameter
-    void valueTreePropertyChanged (ValueTree& tree, const Identifier& property) override
-    {
-        
-        mustUpdateProcessing = true;
-    }
+    
+    Atomic<float>   mGain     {   0.0f };
+    Atomic<float>   mTime     { 200.0f };
+    Atomic<float>   mFeedback {  -6.0f };
+    
+    AudioBuffer<float>&     mDelayBuffer;
+    
+    float mLastInputGain    = 0.0f;
+    float mLastFeedbackGain = 0.0f;
+    
+    int    mWritePos        = 0;
+    int    mExpectedReadPos = -1;
+    double mSampleRate      = 0;
+    
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VariDelayAudioProcessor)
 };
