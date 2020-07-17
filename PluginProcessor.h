@@ -9,7 +9,7 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "Delay.h"
+
 
 
 //==============================================================================
@@ -32,6 +32,16 @@ public:
    #endif
 
     void processBlock (AudioBuffer<float>&, MidiBuffer&) override;
+    
+    void writeToDelayBuffer (AudioBuffer<float>& buffer,
+                             const int channelIn, const int channelOut,
+                             const int writePos, float startGain, float endGain,
+                             bool replacing);
+    
+    void readFromDelayBuffer (AudioBuffer<float>& buffer,
+                              const int channelIn, const int channelOut,
+                              const int readPos, float startGain, float endGain,
+                              bool replacing);
 
     //==============================================================================
     AudioProcessorEditor* createEditor() override;
@@ -63,6 +73,10 @@ public:
     AudioProcessorValueTreeState apvts;
     AudioProcessorValueTreeState::ParameterLayout createParameters();
 
+    static String paramGain;
+    static String paramTime;
+    static String paramFeedback;
+    
 private:
     double seconds = 0;
     bool isActive { false };
@@ -70,16 +84,29 @@ private:
     
     float* rDelay, lDelay;
     
-    enum
+    
+    Atomic<float>   mGain           {   0.0f };
+    Atomic<float>   delayL          { 200.0f };
+    Atomic<float>   delayR          { 200.0f };
+    Atomic<float>   feedbackLevelL   {  -6.0f };
+    Atomic<float>   feedbackLevelR   {  -6.0f };
+    Atomic<float>   wetLevel        {   50.0f };
+    
+    AudioBuffer<float>     mDelayBuffer;
+    
+    float mLastInputGain    = 0.0f;
+    float mLastFeedbackGainL = 0.0f;
+    float mLastFeedbackGainR = 0.0f;
+    
+    int    mWritePos        = 0;
+    int    mExpectedReadPosL = -1;
+    int    mExpectedReadPosR = -1;
+    double mSampleRateL      = 0;
+    double mSampleRateR      = 0;
+    double mSampleRate;
+    
+    void valueTreePropertyChanged(ValueTree& tree, const Identifier& property) override
     {
-        delayIndex
-    };
-    dsp::ProcessorChain<Delay<float>> fxChain;
-
-    // Called when user changes a parameter
-    void valueTreePropertyChanged (ValueTree& tree, const Identifier& property) override
-    {
-        
         mustUpdateProcessing = true;
     }
     //==============================================================================

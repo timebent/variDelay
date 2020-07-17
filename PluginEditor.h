@@ -30,19 +30,22 @@ private:
     
     std::unique_ptr<juce::Slider> delaySliderL;
     std::unique_ptr<juce::Slider> delaySliderR;
-    std::unique_ptr<juce::Slider> feedbackSlider;
+    std::unique_ptr<juce::Slider> feedbackSliderL;
+    std::unique_ptr<juce::Slider> feedbackSliderR;
     std::unique_ptr<juce::Slider> wetSlider;
     
     // Labels
     std::unique_ptr<Label> leftLabel;
     std::unique_ptr<Label> rightLabel;
-    std::unique_ptr<Label> feedbackLabel;
+    std::unique_ptr<Label> fbLabelL;
+    std::unique_ptr<Label> fbLabelR;
     std::unique_ptr<Label> wetLabel;
     
     using Attachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     std::unique_ptr<Attachment> delayAttachmentL;
     std::unique_ptr<Attachment> delayAttachmentR;
-    std::unique_ptr<Attachment> feedbackAttachment;
+    std::unique_ptr<Attachment> feedbackAttachmentL;
+    std::unique_ptr<Attachment> feedbackAttachmentR;
     std::unique_ptr<Attachment> wetAttachment;
     
     VariDelayAudioProcessor& audioProcessor;

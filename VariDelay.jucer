@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <JUCERPROJECT id="w1gQxM" name="VariDelay" projectType="audioplug" useAppConfig="0"
-              addUsingNamespaceToJuceHeader="1" displaySplashScreen="1">
+              addUsingNamespaceToJuceHeader="1" displaySplashScreen="1" jucerFormatVersion="1"
+              pluginVST3Category="Delay">
   <MAINGROUP id="LZ38Ch" name="VariDelay">
     <GROUP id="{4726C86B-40C5-7274-FA53-EAC8FBB4DB15}" name="Source">
-      <FILE id="xnOBOJ" name="PluginProcessor.cpp" compile="1" resource="0"
-            file="Source/PluginProcessor.cpp"/>
-      <FILE id="WioITt" name="PluginProcessor.h" compile="0" resource="0"
-            file="Source/PluginProcessor.h"/>
-      <FILE id="uxtlfM" name="PluginEditor.cpp" compile="1" resource="0"
-            file="Source/PluginEditor.cpp"/>
-      <FILE id="ZNSAEW" name="PluginEditor.h" compile="0" resource="0" file="Source/PluginEditor.h"/>
-      <FILE id="O08a8e" name="Delay.h" compile="0" resource="0" file="Source/Delay.h"/>
-      <FILE id="Sd3weT" name="LookAndFeel.cpp" compile="1" resource="0" file="Source/LookAndFeel.cpp"/>
-      <FILE id="PdGi8s" name="LookAndFeel.h" compile="0" resource="0" file="Source/LookAndFeel.h"/>
+      <FILE id="gLRBwu" name="LookAndFeel.cpp" compile="1" resource="0" file="source/LookAndFeel.cpp"/>
+      <FILE id="wNfKtc" name="LookAndFeel.h" compile="0" resource="0" file="source/LookAndFeel.h"/>
+      <FILE id="HA0F8A" name="PluginEditor.cpp" compile="1" resource="0"
+            file="source/PluginEditor.cpp"/>
+      <FILE id="DiY03G" name="PluginEditor.h" compile="0" resource="0" file="source/PluginEditor.h"/>
+      <FILE id="WYzOZR" name="PluginProcessor.cpp" compile="1" resource="0"
+            file="source/PluginProcessor.cpp"/>
+      <FILE id="yYZdE3" name="PluginProcessor.h" compile="0" resource="0"
+            file="source/PluginProcessor.h"/>
     </GROUP>
   </MAINGROUP>
   <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1" JUCE_VST3_CAN_REPLACE_VST2="0"/>

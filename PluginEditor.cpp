@@ -19,7 +19,7 @@ VariDelayAudioProcessorEditor::VariDelayAudioProcessorEditor (VariDelayAudioProc
     leftLabel->setJustificationType (Justification::centred);
     
     delaySliderR = std::make_unique<Slider>(Slider::SliderStyle::RotaryVerticalDrag, Slider::TextBoxBelow);
-    delaySliderR->setBounds(200, 100, 100, 100);
+    delaySliderR->setBounds(300, 100, 100, 100);
     addAndMakeVisible (delaySliderR.get());
     
     rightLabel = std::make_unique<Label>("", "Delay Right");
@@ -27,17 +27,26 @@ VariDelayAudioProcessorEditor::VariDelayAudioProcessorEditor (VariDelayAudioProc
     rightLabel->attachToComponent (delaySliderR.get(), false);
     rightLabel->setJustificationType (Justification::centred);
     
-    feedbackSlider = std::make_unique<Slider>(Slider::SliderStyle::RotaryVerticalDrag, Slider::TextBoxBelow);
-    feedbackSlider->setBounds(300, 100, 100, 100);
-    addAndMakeVisible (feedbackSlider.get());
+    feedbackSliderL = std::make_unique<Slider>(Slider::SliderStyle::RotaryVerticalDrag, Slider::TextBoxBelow);
+    feedbackSliderL->setBounds(100, 250, 100, 100);
+    addAndMakeVisible (feedbackSliderL.get());
     
-    feedbackLabel = std::make_unique<Label>("", "Feedback");
-    addAndMakeVisible (feedbackLabel.get());
-    feedbackLabel->attachToComponent (feedbackSlider.get(), false);
-    feedbackLabel->setJustificationType (Justification::centred);
+    fbLabelL = std::make_unique<Label>("", "Feedback Left");
+    addAndMakeVisible (fbLabelL.get());
+    fbLabelL->attachToComponent (feedbackSliderL.get(), false);
+    fbLabelL->setJustificationType (Justification::centred);
+    
+    feedbackSliderR = std::make_unique<Slider>(Slider::SliderStyle::RotaryVerticalDrag, Slider::TextBoxBelow);
+    feedbackSliderR->setBounds(300, 250, 100, 100);
+    addAndMakeVisible (feedbackSliderR.get());
+    
+    fbLabelR = std::make_unique<Label>("", "Feedback Right");
+    addAndMakeVisible (fbLabelR.get());
+    fbLabelR->attachToComponent (feedbackSliderR.get(), false);
+    fbLabelR->setJustificationType (Justification::centred);
     
     wetSlider = std::make_unique<Slider>(Slider::SliderStyle::RotaryVerticalDrag, Slider::TextBoxBelow);
-    wetSlider->setBounds(100, 250, 100, 100);
+    wetSlider->setBounds(500, 250, 100, 100);
     addAndMakeVisible (wetSlider.get());
     
     wetLabel = std::make_unique<Label>("", "Wet Mix");
@@ -48,7 +57,8 @@ VariDelayAudioProcessorEditor::VariDelayAudioProcessorEditor (VariDelayAudioProc
     using Attachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     delayAttachmentL = std::make_unique<Attachment>(audioProcessor.apvts, "Time L", *delaySliderL);
     delayAttachmentR = std::make_unique<Attachment>(audioProcessor.apvts, "Time R", *delaySliderR);
-    feedbackAttachment = std::make_unique<Attachment>(audioProcessor.apvts, "FB", *feedbackSlider);
+    feedbackAttachmentL = std::make_unique<Attachment>(audioProcessor.apvts, "FB L", *feedbackSliderL);
+    feedbackAttachmentR = std::make_unique<Attachment>(audioProcessor.apvts, "FB R", *feedbackSliderR);
     wetAttachment = std::make_unique<Attachment>(audioProcessor.apvts, "WET", *wetSlider);
    
     
