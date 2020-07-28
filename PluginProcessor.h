@@ -9,7 +9,7 @@
 #pragma once
 
 #include <JuceHeader.h>
-
+#include <rubberband/RubberBandStretcher.h>
 
 
 //==============================================================================
@@ -78,11 +78,16 @@ public:
     static String paramFeedback;
     
 private:
-    double seconds = 0;
+    std::unique_ptr<RubberBand::RubberBandStretcher> stretchL;
+    AudioBuffer<float>      stretchBufferL;
+    std::unique_ptr<RubberBand::RubberBandStretcher> stretchR;
+    AudioBuffer<float>      stretchBufferR;
+    
+    double seconds;
     bool isActive { false };
     bool mustUpdateProcessing { false };
     
-    float* rDelay, lDelay;
+    //float* rDelay, lDelay;
     
     
     Atomic<float>   mGain           {   0.0f };
