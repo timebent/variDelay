@@ -88,23 +88,41 @@ void VariDelayAudioProcessor::changeProgramName (int index, const juce::String& 
 //==============================================================================
 void VariDelayAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    /* init buffers, delay buffer in constructor */
+    stretchBufferL.setSize(1, samplesPerBlock);
+    stretchBufferR.setSize(1, samplesPerBlock);
+    
+    /* init instances of RubberBand */
+    stretchL = std::make_unique<RubberBand::RubberBandStretcher>(sampleRate, 1, RubberBand::RubberBandStretcher::Option::OptionProcessRealTime, 1.0f, 0.8f);
+    stretchR = std::make_unique<RubberBand::RubberBandStretcher>(sampleRate, 1,RubberBand::RubberBandStretcher::Option::OptionProcessRealTime, 1.0f, 0.8f);
+    
+    /* vestigual structure I'm afraid to remove */
     mSampleRate = sampleRate;
     mSampleRateL = sampleRate;
     mSampleRateR = sampleRate;
+    
     update();
+    
     // sample buffer for 2 seconds + 2 buffers safety
     mDelayBuffer.setSize (getTotalNumOutputChannels(), 2.0 * (samplesPerBlock + sampleRate), false, false);
-    mDelayBuffer.clear();
     
+    
+    /* used to trigger a certain if statement in readFromDelayBuffer() that cross fades between the two delay settings*/
     mExpectedReadPosL = -1;
     mExpectedReadPosR = -1;
+    
+    /* clear garbage */
+    stretchL->reset();
+    stretchR->reset();
+    mDelayBuffer.clear();
+    DBG("prepare");
 }
 
 
 
 void VariDelayAudioProcessor::releaseResources()
 {
-
+    
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -132,17 +150,16 @@ bool VariDelayAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts
 
 void VariDelayAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& midiMessages)
 {
+    /* for GUI */
     if (mustUpdateProcessing)
         update();
     
     juce::ScopedNoDenormals noDenormals;
-    auto inputChannels  = getTotalNumInputChannels();
-    auto outputChannels = getTotalNumOutputChannels();
+   
     
     const float gain = Decibels::decibelsToGain (mGain.get());
     const float feedbackL = Decibels::decibelsToGain (feedbackLevelL.get());
     const float feedbackR = Decibels::decibelsToGain (feedbackLevelR.get());
-    /* mono input currently, create if statement later to accomplish stereo input */
     
     // adapt dry gain
     buffer.applyGainRamp (0, buffer.getNumSamples(), mLastInputGain, gain);
@@ -163,6 +180,7 @@ void VariDelayAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuff
 
         /* true means we are replacing rather than adding, so whole buffer is copied directly to delayBuffer */
         writeToDelayBuffer(buffer, leftChan, 0, mWritePos, 1.0f, 1.0f, true);
+        
         /*-------------------------------------------------------*/
         /*
          readPos is an index of the delayLine, set back in position by the delay time (ms)
@@ -175,11 +193,12 @@ void VariDelayAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuff
             readPosL += mDelayBuffer.getNumSamples(); // wraps readPos around mDelayBuffer size
 
         /*-------------------------------------------------------*/
+        /* seems like channel 0 means left and channel 1 means right? Not the case. */
         if (Bus* outputBusL = getBus (false, 0))
         {
             /*-------------------------------------------------------*/
             /*
-                skipped the first time, sends you to teh next if() statement
+                skipped the first time, sends you to the next if() statement
             */
                 if (mExpectedReadPosL >= 0 )
                 {
@@ -194,6 +213,7 @@ void VariDelayAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuff
                     readFromDelayBuffer (buffer, 0, outputChannelNum, mExpectedReadPosL, 1.0, endGainL, false);
                     
                 }
+        
                 
                 /*-------------------------------------------------------*/
                 /*
@@ -219,6 +239,8 @@ void VariDelayAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuff
     /*===============================================================*/
     /*--------------------- RIGHT CHANNEL ---------------------------*/
     /*===============================================================*/
+    /* basically same as above, just checkout the output part */
+        
         const float timeR = delayR.get();
             
         const int rightChan = input->getChannelIndexInProcessBlockBuffer (1);
@@ -230,7 +252,13 @@ void VariDelayAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuff
         auto readPosR = roundToInt (mWritePos - (mSampleRateR * timeR / 1000.0));
         if (readPosR < 0)
             readPosR += mDelayBuffer.getNumSamples(); // wraps readPos around mDelayBuffer size
-            
+        
+        /*-----------------------------------------------------------*/
+        /*
+            this runs when set to 0 and still produces a different delay line
+            something horrific happens if you put 1 here.  Something like
+         
+        */
         if (Bus* outputR = getBus (false, 0))
         {
             /*-------------------------------------------------------*/
@@ -286,25 +314,21 @@ void VariDelayAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuff
     
     
     
+    
+    
+
 }
-/** Copies samples from an array of floats into one of the channels, applying a gain ramp.
- 
- @param destChannel          the channel within this buffer to copy the samples to
- @param destStartSample      the start sample within this buffer's channel
- @param source               the source buffer to read from
- @param numSamples           the number of samples to process
- @param startGain            the gain to apply to the first sample (this is multiplied with
- the source samples before they are copied to this buffer)
- @param endGain              the gain to apply to the final sample. The gain is linearly
- interpolated between the first and last samples.
- 
- @see addFrom
- */
-void VariDelayAudioProcessor::writeToDelayBuffer (AudioBuffer<float>& buffer,
-                                                  const int channelIn, const int channelOut,
+/*========================================================================================*/
+/*================================= WRITE TO DELAY =======================================*/
+/*
+    Writes to the circular buffer.  The bool is used to determine whether or not to
+    copyFrom or addFrom.  'midPos' is used to wrap around the circular buffer if the
+    audioBuffer is too big.
+*/
+void VariDelayAudioProcessor::writeToDelayBuffer (AudioBuffer<float>& buffer, const int channelIn, const int channelOut,
                                                   const int writePos, float startGain, float endGain, bool replacing)
 {
-    /*-------------------------------------------------------*/
+    
     if (writePos + buffer.getNumSamples() <= mDelayBuffer.getNumSamples())
     {
         if (replacing)
@@ -313,8 +337,6 @@ void VariDelayAudioProcessor::writeToDelayBuffer (AudioBuffer<float>& buffer,
             mDelayBuffer.addFromWithRamp (channelOut, writePos, buffer.getReadPointer (channelIn), buffer.getNumSamples(), startGain, endGain);
     }
     /*-------------------------------------------------------*/
-    
-    
     else
     {
         const auto midPos  = mDelayBuffer.getNumSamples() - writePos;
@@ -333,66 +355,128 @@ void VariDelayAudioProcessor::writeToDelayBuffer (AudioBuffer<float>& buffer,
 }
 
 
-/*
- This is used by the output of the process block to get the samples out of the delayBuffer
- the if/else statement is a function of the wrapper
- We pass the AudioSampleBuffer& (weird type?) because we are calling buffer.copyFromWithRamp() and buffer.addFromWithRamp()
- which actually outputs this
- endGain might be 0.0 if we adjust the delayTime (i believe)
- 
- 'replacing' triggers the 'else' statements, for when the delay time has changed
- 
- iteration through each delay buffer is done around the function call in processBlock()
- */
-void VariDelayAudioProcessor::readFromDelayBuffer (AudioSampleBuffer& buffer,
-                                                   const int channelIn, const int channelOut,
-                                                   const int readPos,
-                                                   float startGain, float endGain,
-                                                   bool replacing)
+/*=========================================================================================*/
+/*================================= READ FROM DELAY =======================================*/
+void VariDelayAudioProcessor::readFromDelayBuffer (AudioSampleBuffer& buffer, const int channelIn, const int channelOut, const int readPos, float startGain, float endGain, bool replacing)
 {
-    /*-------------------------------------------------------*/
-    /*
-     this is run when the readPos is equal to mExpectedReadPos, so when the delay hasn't changed
-     */
+   
+    
+    auto readPointersL = stretchBufferL.getArrayOfReadPointers();
+    auto readPointersR = stretchBufferR.getArrayOfReadPointers();
+    auto samplesAvailableL = stretchL->available();
+    auto samplesAvailableR = stretchR->available();
+    
+    auto outputSamples = buffer.getNumSamples();
+    auto writePointers = buffer.getArrayOfWritePointers();
+    
+
     if (readPos + buffer.getNumSamples() <= mDelayBuffer.getNumSamples())
     {
         
         if (replacing) // (channel, startSample, source*, length, gain, gain)
-            buffer.copyFromWithRamp (channelOut, 0, mDelayBuffer.getReadPointer (channelIn, readPos), buffer.getNumSamples(), startGain, endGain);
+        {
+            
+            if (channelOut == 0)
+            {
+                stretchBufferL.copyFromWithRamp (channelOut, 0, mDelayBuffer.getReadPointer (channelIn, readPos), stretchBufferL.getNumSamples(), startGain, endGain);
+                
+                while (samplesAvailableL < outputSamples)
+                {
+                    stretchL->process(readPointersL, stretchBufferL.getNumSamples(), false); //fills mTempBuffer
+                    samplesAvailableL = stretchL->available();
+                }
+            } else
+            {
+                stretchBufferR.copyFromWithRamp (0, 0, mDelayBuffer.getReadPointer (channelIn, readPos), stretchBufferR.getNumSamples(), startGain, endGain);
+                
+                while (samplesAvailableR < outputSamples)
+                {
+                    stretchR->process(readPointersR, stretchBufferR.getNumSamples(), false); //fills mTempBuffer
+                    samplesAvailableR = stretchR->available();
+                }
+            }
+        }
         else
-            buffer.addFromWithRamp (channelOut, 0, mDelayBuffer.getReadPointer (channelIn, readPos), buffer.getNumSamples(), startGain, endGain);
+        {
+            if (channelOut == 0)
+            {
+                stretchBufferL.addFromWithRamp (channelOut, 0, mDelayBuffer.getReadPointer (channelIn, readPos), stretchBufferL.getNumSamples(), startGain, endGain);
+                
+                while (samplesAvailableL < outputSamples)
+                {
+                    stretchL->process(readPointersL, stretchBufferL.getNumSamples(), false); //fills mTempBuffer
+                    samplesAvailableL = stretchL->available();
+                }
+            } else
+            { // have to add to channel 0 because I made two buffers and a single channel buffer only has one channel (0)
+                stretchBufferR.addFromWithRamp (0, 0, mDelayBuffer.getReadPointer (channelIn, readPos), stretchBufferR.getNumSamples(), startGain, endGain);
+                
+                while (samplesAvailableR < outputSamples)
+                {
+                    stretchR->process(readPointersR, stretchBufferR.getNumSamples(), false); //fills mTempBuffer
+                    samplesAvailableR = stretchR->available();
+                }
+            }
+        }
     }
-    /*-------------------------------------------------------*/
-    /*
-     triggered when the buffer(output) length would read past the length of the current delayBuffer
-     */
     else
     {
-        // the length of the audio buffer would overlap the end of the delay buffer, so we have to create the 'midPos'
         const auto midPos  = mDelayBuffer.getNumSamples() - readPos;
-        /*
-         nothing if endGain = 1.0, but if 0.0 this will schedule the fade out to take as long as we have until the next buffer.
-         targetRangeMin + value0To1 * (targetRangeMax - targetRangeMin); startGain is min, endGain is max.
-         1.0 + 0.6 * (0.0 - 1.0) = 0.4.
-         midGain -> what gain is at midPos as we approach 0
-         */
         const auto midGain = jmap (float (midPos) / buffer.getNumSamples(), startGain, endGain);
         if (replacing)
         {
-            /*
-             go from startGain (1.0) to midGain over the length of midPos,
-             starting at sample 0 of buffer and readPos of mDelayBuffer
-             then we go from midGain to 0.0 over the remaining samples after midGain
-             */
-            buffer.copyFromWithRamp (channelOut, 0, mDelayBuffer.getReadPointer (channelIn, readPos), midPos, startGain, midGain);
-            buffer.copyFromWithRamp (channelOut, midPos, mDelayBuffer.getReadPointer (channelIn), buffer.getNumSamples() - midPos, midGain, endGain);
+            if (channelOut == 0)
+            {
+                stretchBufferL.copyFromWithRamp (channelOut, 0, mDelayBuffer.getReadPointer (channelIn, readPos), midPos, startGain, midGain);
+                stretchBufferL.copyFromWithRamp (channelOut, midPos, mDelayBuffer.getReadPointer (channelIn), stretchBufferL.getNumSamples() - midPos, midGain, endGain);
+                
+                while (samplesAvailableL < outputSamples)
+                {
+                    stretchL->process(readPointersL, stretchBufferL.getNumSamples(), false); //fills mTempBuffer
+                    samplesAvailableL = stretchL->available();
+                }
+            } else
+            {
+                stretchBufferR.copyFromWithRamp (0, 0, mDelayBuffer.getReadPointer (channelIn, readPos), midPos, startGain, midGain);
+                stretchBufferR.copyFromWithRamp (0, midPos, mDelayBuffer.getReadPointer (channelIn), stretchBufferR.getNumSamples() - midPos, midGain, endGain);
+ 
+                while (samplesAvailableR < outputSamples)
+                {
+                    stretchR->process(readPointersR, stretchBufferR.getNumSamples(), false); //fills mTempBuffer
+                    samplesAvailableR = stretchR->available();
+                }
+            }
+            
         }
         else
         {
-            buffer.addFromWithRamp (channelOut, 0, mDelayBuffer.getReadPointer (channelIn, readPos), midPos, startGain, midGain);
-            buffer.addFromWithRamp (channelOut, midPos, mDelayBuffer.getReadPointer (channelIn), buffer.getNumSamples() - midPos, midGain, endGain);
+            if (channelOut == 0)
+            {
+                stretchBufferL.addFromWithRamp (channelOut, 0, mDelayBuffer.getReadPointer (channelIn, readPos), midPos, startGain, midGain);
+                stretchBufferL.addFromWithRamp (channelOut, midPos, mDelayBuffer.getReadPointer (channelIn), stretchBufferL.getNumSamples() - midPos, midGain, endGain);
+                
+                while (samplesAvailableL < outputSamples)
+                {
+                    stretchL->process(readPointersL, stretchBufferL.getNumSamples(), false); //fills mTempBuffer
+                    samplesAvailableL = stretchL->available();
+                }
+            } else
+            {
+                stretchBufferR.addFromWithRamp (0, 0, mDelayBuffer.getReadPointer (channelIn, readPos), midPos, startGain, midGain);
+                stretchBufferR.addFromWithRamp (0, midPos, mDelayBuffer.getReadPointer (channelIn), stretchBufferR.getNumSamples() - midPos, midGain, endGain);
+                
+                while (samplesAvailableR < outputSamples)
+                {
+                    stretchR->process(readPointersR, stretchBufferR.getNumSamples(), false); //fills mTempBuffer
+                    samplesAvailableR = stretchR->available();
+                }
+            }
         }
+        
     }
+    stretchL->retrieve(writePointers, buffer.getNumSamples());
+    stretchR->retrieve(writePointers, buffer.getNumSamples());
+    
 }
 
 //==============================================================================
@@ -435,6 +519,7 @@ void VariDelayAudioProcessor::update()
     auto feedbackL = apvts.getRawParameterValue("FB L");
     auto feedbackR = apvts.getRawParameterValue("FB R");
     auto wetLevel = apvts.getRawParameterValue("WET");
+  
     
     using mult = juce::ValueSmoothingTypes::Multiplicative;
     using lin = juce::ValueSmoothingTypes::Linear;
@@ -454,21 +539,11 @@ void VariDelayAudioProcessor::update()
     juce::SmoothedValue<float, lin> mWet;
     mWet.setTargetValue(*wetLevel);
     
-    auto newDelayL = lDelay.getNextValue();
-    auto newDelayR = rDelay.getNextValue();
-    
-    auto changePercentL = *lTime / currentL;
-    auto changePercentR = *rTime / currentR;
-    
     delayL = lDelay.getNextValue();
     delayR = rDelay.getNextValue();
     feedbackLevelL = mFeedbackL.getNextValue();
     feedbackLevelR = mFeedbackR.getNextValue();
    // wetLevel = mWet.getNextValue();
-    
-    
-    
- 
 
 }
 
